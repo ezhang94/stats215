@@ -1,0 +1,280 @@
+%!TEX root = main.tex
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\textbf{Problem 2:} \textit{Spike sorting with mixture models} 
+
+As discussed in class, ``spike sorting'' is ultimately a mixture modeling problem.  Here we will study the problem in more detail.  Let~$\{y_n\}_{n=1}^N$ represent a collection of spikes.  Each~$y_n \in \reals^D$ is a vector containing features of the~$n$-th spike waveform.  For example, the features may be projections of the spike waveform onto the top~$D$ principal components.  We have the following, general model,
+\begin{align*}
+    z_n \mid \pi &\sim \pi \\
+    y_n \mid z_n, \theta &\sim p(y_n \mid \theta_{z_n}).
+\end{align*}
+The label~$z_n \in \{1,\ldots, K\}$ indicates which of the~$K$ neurons generated the~$n$-th spike waveform.  The probability vector~$\pi \in \Delta_K$ specifies a prior distribution on spike labels, and the parameters~$\theta = \{\theta_k\}_{k=1}^K$ determine the likelihood of the spike waveforms~$y_n$ for each of the~$K$ neurons. The goal is to infer a posterior distribution~$p(z_n \mid y_n, \pi, \theta)$ over labels for each observed spike, and to learn the parameters~$\pi^\star$ and~$\theta^\star$ that maximize the likelihood of the data.
+
+\begin{enumerate}[label=(\alph*)]
+% ============================================================================
+\item Start with a Gaussian observation model,
+\begin{align*}
+    y_n \mid z_n, \theta &\sim \cN(y_n \mid \mu_{z_n}, \Sigma_{z_n}),
+\end{align*}
+where~$\theta_k = (\mu_k, \Sigma_k)$ includes the mean and covariance for the $k$-th neuron.  
+
+Derive an EM algorithm to compute~$\pi^\star, \theta^\star = \argmax p(\{y_n\}_{n=1}^N \mid \pi, \theta)$.  Start by deriving the ``responsibilities'' $w_{nk} = p(z_n = k \mid y_n, \pi', \theta')$ for fixed parameters~$\pi'$ and~$\theta'$.  Then use the responsibilities to compute the expected log joint probability,
+\begin{align*}
+    \cL(\pi, \theta) &= \sum_{n=1}^N \bbE_{p(z_n | y_n, \pi', \theta')} \left[ \log p(y_n, z_n \mid \pi, \theta) \right].
+\end{align*}
+Finally, find closed-form expressions for~$\pi^\star$ and~$\theta^\star$ that optimize~$\cL(\pi, \theta)$.
+
+\begin{solution}
+% -----------------------------------------------
+
+First, we derive the weights. This is equivalent to the E-step of EM:
+\begin{align*}
+    w_{nk} &= p(z_n = k \mid y_n, \pi', \theta') \\
+        &= p(y_n \given z_n = k, \pi', \theta')\, p(z_n=k \given \pi') \\
+        &= \distNormal(y_n\given \mu_k', \pi_k') \, \pi_k'
+\end{align*}
+
+Next, we calculate the expected log joint probability. This is the objective that we will be maximizing during our M-step.
+\begin{align*}
+    \cL(\pi, \theta)
+        &= \sum_{n=1}^N \E_{p(z_n \given y_n, \pi', \theta')}
+            \big[\log [p(y_n, z_n \given \pi', \theta')]
+            \big] \\
+        &= \sum_{n=1}^N \E_{p(z_n \given y_n, \pi', \theta')}
+            \big[\log \big[\textstyle\prod_k (
+                p(y_n \given z_n, \pi', \theta') p(z_n \given \pi', \theta')
+                )^{\bbI[z_n = k]}\big]
+            \big] + \textrm{const.}\\
+        &= \sum_{n=1}^N \E_{p(z_n \given y_n, \pi', \theta')}
+            \big[\sum_k \bbI[z_n =k] \big(
+                -\frac{1}{2}(y_n-\mu_k')^\trans J_k'^{-1} (y_n-\mu_k')
+                +\frac{1}{2}\log|J_k| + \log\pi_k'
+            \big) \big] + \textrm{const.} \\
+        &= \sum_{n=1}^N \sum_k
+            \E_{p(z_n = k \given y_{nk}, \pi_k', \theta_k')}
+            \big[ \bbI[z_n =k] \big(
+                -\frac{1}{2}(y_n-\mu_k')^\trans J_k'^{-1} (y_n-\mu_k')
+                +\frac{1}{2}\log|J_k| + \log\pi_k'
+            \big) \big] + \textrm{const.}
+\end{align*}
+where we substitute the inverse of the covariance matrix with the precision matrix, $J_k'=\Sigma_k'^{-1}$.
+
+Now, to find the parameters $\pi^*$ and $\theta^* = (\mu^*, \Sigma^*)$ which maximize this expected log joint, we take the gradient of the objective with respect to each parameter and set to 0.
+
+\begin{align*}
+    \nabla_{\mu_k} \cL(\pi, \theta)
+        &= \sum_n w_{nk}\, J_k'\,(y_n-\mu_k^*) \\
+        &= J_k'\,\sum_n w_{nk}\, (y_n-\mu_k^*) = 0 \\
+    \Rightarrow \mu_k^* &= \frac{\sum_n w_{nk}\,y_n}{\sum_n w_{nk}} \\
+    &\\
+    \nabla_{J_k} \cL(\pi, \theta)
+        &= \sum_n w_{nk}\, (-\frac{1}{2})\,(y_n-\mu_k')(y_n-\mu_k')^\trans
+            +\frac{1}{2} J_k^{*-1} \\
+    \Rightarrow J_k^{*-1}
+        &= \frac{\sum_n w_{nk}\,(y_n-\mu_k')(y_n-\mu_k')^\trans}{\sum_n w_{nk}}
+\end{align*}
+where we Jacobi's formula to calculate the derivative of a determinant:
+\begin{align*}
+    \frac{d}{dx} |X|
+        = \mathrm{adj}(X) = |X|\;X^{-1}; \qquad\qquad
+    \frac{d}{dx} \log|X|
+        = \frac{1}{|X|}|X|\;X^{-1} = X^{-1}
+\end{align*}
+
+We can interpret the optimal $\theta$ parameters as the weighted average of the previous $\theta'$, weighted by the responsibilities/posterior values of assignments $z_n$.
+
+Finally, to find the maximizing argument $\pi_k^*$, we want to first add a Lagrangian multiplier to encoe the constraint that $\sum_k \pi_k = 1$.
+\begin{align*}
+    \nabla_{\pi_k} \cL(\pi, \theta) + \sum_n \lambda\,(1-\sum_k \pi_{nk})
+        = \sum_n w_{nk} \frac{1}{\pi_{nk}^*} - \lambda = 0\;
+    \Rightarrow \pi_{nk}^* = \frac{1}{\lambda} \sum_n w_{nk}
+\end{align*}
+Finally, to find the value of this Lagrange multiplier, note that we share the same $\lambda$ for each of the $K$ $\pi_k$'s. So, with the simplex constraint on $\pi^*$, we find
+\begin{align*}
+    \sum_k \pi_k^*
+        &= \sum_k \frac{1}{\lambda} \left(\sum_n \pi_{nk}^*\right) \\
+        &= \frac{1}{\lambda} \sum_n \left(\sum_k \pi_{nk}^*\right) \\
+        &= \frac{1}{\lambda} \sum_n 1 = \frac{N}{\lambda} = 1 \;
+            \Rightarrow \lambda = N
+\end{align*}
+
+Therefore, the maximizing responsibilities are just the expected value of expeted value of the responsibilities/weights.
+$$ \pi_{nk}^* = \frac{\sum_n w_{nk}}{N} $$
+
+% -----------------------------------------------
+\end{solution}
+
+% ============================================================================
+% ============================================================================
+\clearpage
+
+\item The Gaussian model can be sensitive to outliers and lead spikes from one neuron to be split into two clusters.  One way to side-step this issue is to replace the Gaussian with a heavier-tailed distribution like the multivariate Student's t, which has probability density,
+\begin{align*}
+    p(y_n \mid \theta_{z_n}) &=  {\frac {\Gamma \left[(\alpha_0 +D)/2\right]}{\Gamma (\alpha_0 /2)\alpha_0 ^{D/2}\pi ^{D/2}\left|{\Sigma_{z_n}}\right|^{1/2}}} \left[1+{\frac{1}{\alpha_0}} (y_n-\mu_{z_n})^\trans \Sigma_{z_n}^{-1}(y_n - \mu_{z_n})\right]^{-(\alpha_0 +D)/2} \hspace{-3.5em}.
+\end{align*}
+We will treat~$\alpha_0$ as a fixed hyperparameter. 
+
+Like the negative binomial distribution studied in HW1, the multivariate Student's t can also be represented as an infinite mixture,
+\begin{align*}
+    p(y_n \mid \theta_{z_n}) &= \int p(y_n, \tau_n \mid \theta_{z_n}) \, \dif \tau_n 
+    = \int \cN(y_n ; \mu_{z_n}, \tau_n^{-1} \Sigma_{z_n}) \, \mathrm{Gamma}(\tau_n ; \tfrac{\alpha_0}{2}, \tfrac{1}{2}) \, \dif \tau_n.
+\end{align*}
+We will derive an EM algorithm to find~$\pi^\star, \theta^\star$ in this model. 
+
+First, show that the posterior takes the form
+\begin{align*}
+    p(\tau_n, z_n \mid y_n, \pi, \theta) &= p(z_n \mid y_n, \pi, \theta) \, p(\tau_n \mid z_n, y_n, \theta)\\
+    &= \prod_{k=1}^K \bigg[ w_{nk} \, \mathrm{Gamma}(\tau_n \mid a_{nk}, b_{nk}) \bigg]^{\bbI[z_n = k]},
+\end{align*}
+and solve for the parameters~$w_{nk}, a_{nk}, b_{nk}$ in terms of~$y_n$,~$\pi$, and~$\theta$.
+
+\begin{solution}
+% -----------------------------------------------
+
+\begin{align*}
+    p(\tau_n, z_n \mid y_n, \pi, \theta)
+        &= p(\tau_n \mid y_n, \theta, z_n) \, p(z_n \mid y_n, \pi, \theta) \\
+        &\propto p(y_n \given \tau_n, \theta,z_n) \, p(\tau_n\given\alpha_0) \;
+            p(y_n \given z_n, \pi) p(z_n \given \pi) \\
+        &\propto \mathcal{N}(y_n \given \mu_{z_n}, \tau_n^{-1} \Sigma_{z_n})\, 
+            \textrm{Gamma}\big(z_n \given\frac{\alpha_0}{2}, \frac{1}{2}\big)\,
+            \mathrm{tdist}\big(y_n\given(\theta, z_n, \alpha_0)\big) \, 
+            \textrm{Cat}(z_n \given \pi) \\
+        &\propto \prod_k \Big[
+                |\tau^{-1}\Sigma_{z_n}|^{-\frac{1}{2}}
+                \expp{-\frac{1}{2}||y_n-\mu_{z_n}||^2_{\Sigma_{z_n}} \tau_n}
+                \tau_n^{\frac{\alpha_0}{2}-1} \expp{-\frac{1}{2}\tau_n} \\
+        &\hspace{225pt}
+                \left(\frac{1}{\alpha_0}||y_n-\mu_{z_n}||^2_{\Sigma_{z_n}} + 1\right)
+                \pi_k
+            \Big]^{\bbI[z_n = k]}\\
+        &\propto \prod_k \Big[
+            \tau_n^{\frac{\alpha_0 + D}{2} - 1}
+            \expp{-\tau_n\,\big(1+||y_n-\mu_{z_n}||^2_{\Sigma_{z_n}}\big)/2}
+            \tilde{\pi}_{nk}
+            \Big]^{\bbI[z_n = k]}\\
+        &= \prod_k \Big[
+                \mathrm{Gamma}(\tau_n \mid a_{nk}, b_{nk}) \, w_{nk}
+            \Big]^{\bbI[z_n = k]}
+\end{align*}
+where
+%%
+$\tilde{\pi}_{nk}
+    = \mathrm{tdist}\big(y_n\given(\theta,z_n=k,\alpha_0)\big)\,\pi_k$
+%%
+and the parameters are
+\begin{align*}
+    a_{nk}  &= (\alpha_0 + D)/2
+    \\
+    b_{nk}  &= (1+||y_n-\mu_{k}'||^2_{\Sigma_{k}'})/2
+    \\
+    w_{nk}  &= \frac{\tilde{\pi}_{nk}}
+                    {\textstyle\sum_{k'} \tilde{\pi}_{nk'}}
+\end{align*}
+% -----------------------------------------------
+\end{solution}
+
+% ============================================================================
+% ============================================================================
+\clearpage
+
+\item Now compute the expected log joint probability,
+\begin{align*}
+    \cL(\pi, \theta) &= \sum_{n=1}^N \bbE_{p(\tau_n, z_n | y_n, \pi', \theta')} \left[ \log p(y_n, z_n, \tau_n \mid \pi, \theta) \right],
+\end{align*}
+using the fact that~$\bbE[X] = a/b$ for~$X \sim \mathrm{Gamma}(a, b)$.  You may omit terms that are constant with respect to~$\pi$ and~$\theta$.
+
+\begin{solution}
+%-----------------------------------------------
+\begin{align*}
+    \cL(\pi, \theta)
+        &= \sum_n \E_{p(\tau_n, z_n \given y_n, \pi', \theta')}
+            \Big[ \log p(y_n, \tau_n, z_n \given \pi, \theta)\Big] \\
+        &= \sum_n \E_{p(\tau_n, z_n \given y_n, \pi', \theta')}
+            \Big[ \log \prod_k \big[ 
+                p(y_n, \given \tau_n, z_n=k, \pi_k, \theta_k)
+                p(\tau_n \given \alpha_0)
+                p(z_n =k \given \pi_k)
+                \big]^{\bbI[z_n = k]}
+            \Big] \\
+        &= \sum_n \sum_k \E_{p(\tau_n, z_n \given y_n, \pi', \theta')}
+            \Big[\bbI[z_n = k] \log
+                \distNormal(y_n \given \mu_k', \tau_n^{-1}\Sigma_k) \,
+                \distGamma(\tau_n \given \frac{\alpha_0}{2}, \frac{1}{2}) \,
+                \pi_k
+            \Big] \\
+        &= \sum_n \sum_k \E_{p(z_n \given y_n, \pi', \theta')\,
+                            p(\tau_n \given y_n, \pi', \theta')\,}
+            \Big[\bbI[z_n = k] \big(
+                -\frac{\tau_n}{2}\, ||y_n - \mu_k||^2_{J_k^{-1}}
+                +\frac{D}{2}\log(\tau_n) + \frac{1}{2} \log(|J_k|) \\
+        &\hspace{200pt}
+                + (\frac{\alpha_0}{2}-1) \log(\tau_n) - \frac{1}{2} \tau_n
+                + \log(\pi_k')
+            \big) \Big] +\textrm{const.}\\
+        &= \sum_n \sum_k \E_{p(z_n \given y_n, \pi', \theta')\,
+                            p(\tau_n \given y_n, \pi', \theta')\,}
+            \Big[\bbI[z_n = k] \big(
+                \tau_n(-\frac{1}{2}\, ||y_n - \mu_k||^2_{J_k^{-1}}
+                    -\frac{1}{2})
+                + \frac{1}{2} \log(|J_k|) \\
+        &\hspace{225pt}
+                + (\frac{\alpha_0+D}{2}-1) \log(\tau_n)
+                + \log(\pi_k)
+            \big) \Big] +\textrm{const.}\\
+        &= \sum_n \sum_k w_{nk} \Big(
+                \frac{a_{nk}}{b_{nk}}(-\frac{1}{2}\, ||y_n - \mu_k||^2_{J_k^{-1}}
+                    -\frac{1}{2})
+                + \frac{1}{2} \log(|J_k|) \\
+            &\hspace{175pt}
+                + (\frac{\alpha_0+D}{2}-1)[\log(b_{nk}) + \psi(a_{nk})]
+                + \log(\pi_k)
+            \Big) +\textrm{const.}\\
+\end{align*}
+where we use the fact that
+$\E[X] = a/b$ and
+$\E[\log X] = \log b + \psi(a)$
+for $X \sim\distGamma(a,b)$ and where $\psi(\cdot)$ is the digamma function.
+
+%-----------------------------------------------
+\end{solution}
+
+% ===============================================
+\clearpage
+\item Finally, solve for~$\pi^\star$ and~$\theta^\star$ that maximize the expected log joint probability.  How does your answer compare to the solution you found in part (a)?
+
+\begin{solution}
+%-----------------------------------------------
+Finally, we take the derivative of the objective with respect to each parameter, as we did in the latter part of part (a) to find
+$\pi^*$ and $\theta^* = (\mu^*, \Sigma^*)$
+
+\begin{align*}
+    \nabla_{\mu_k} \cL(\pi, \theta)
+        &= \sum_n w_{nk}\frac{a_{nk}}{b_{nk}}\, J_k\,(y_n-\mu_k^*) \\
+        &= J_k\,\sum_n w_{nk}\frac{a_{nk}}{b_{nk}}\, (y_n-\mu_k^*) = 0 \\
+    \Rightarrow \mu_k^* &= \frac{\sum_n \tilde{w}_{nk}\,y_n}{\sum_n \tilde{w}_{nk}}
+\end{align*}
+
+where we let $\tilde{w}_{nk} = w_{nk} \frac{a_{nk}}{b_{nk}}$. Compared to the optimal mean parameter found in part (a), which we will denote $\hat{\mu}_k^*$, we see that both optimal parameters take the form of a "weighted" sum of observed data points $y_n$. However, we have
+\begin{equation*}
+    \hat{w}_{nk} = \distNormal(y_n\given \theta', z_n=k)\pi_k'
+        \qquad\textrm{vs.}\qquad
+    \tilde{w}_{nk} = \frac{a_{nk}}{b_{nk}}\,
+        \mathrm{tdist}(y_n\given(\theta', z_n=k, \alpha_0))\pi_k'
+\end{equation*}
+
+We see that our $w_{nk}$ (which is the updated weights, so not exactly the same as in part (b)), capture the spread of $y_n$ according to the t-distribution and the posterior mode of $\tau_n$.
+
+Similarly, we find that
+\begin{align*}
+    J_k^{*-1}
+        &= \frac{\sum_n \tilde{w}_{nk}\,(y_n-\mu_k')(y_n-\mu_k')^\trans}
+        {\sum_n \tilde{w}_{nk}}
+\end{align*}
+
+We find that the form of the maximizing assignments $\pi_k^*=\sum_n w_{nk}/N$ are also similiar in form to $\hat{\pi}_k^* = \sum_n \hat{w_{nk}}/N$, with the altered weights.
+
+%-----------------------------------------------
+\end{solution}
+
+\end{enumerate}

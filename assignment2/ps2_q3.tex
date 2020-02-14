@@ -1,0 +1,226 @@
+%!TEX root = main.tex
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\textbf{Problem 3:} \textit{Poisson matrix factorization}
+
+Many biological datasets come in the form of matrices of non-negative counts.  RNA sequencing data, neural spike trains, and network data (where each entry indicate the number of connections between a pair of nodes) are all good examples.  It is common to model these counts as a function of some latent features of the corresponding row and column.  Here we consider one such model, which decomposes a count matrix into a superposition of non-negative row and column factors. 
+
+Let~$Y \in \bbN^{M \times N}$ denote an observed~$M \times N$ matrix of non-negative count data.  We model this matrix as a function of non-negative row factors~$U \in \reals_+^{M \times K}$ and column factors~$V \in \reals_+^{N \times K}$.  Let~$u_m \in \reals_+^K$ and $v_n \in \reals_+^K$ denote the~$m$-th and~$n$-th rows of~$U$ and~$V$, respectively.  We assume that each observed count~$y_{mn}$ is conditionally independent of the others given its corresponding row and column factors. Moreover, we assume a linear Poisson model,
+\begin{align*}
+    y_{mn} \mid u_m, v_n &\sim \mathrm{Poisson}(u_m^\trans v_n).
+\end{align*}
+(Since~$u_m$ and~$v_n$ are non-negative, the mean parameter is valid.)  Finally, assume gamma priors,
+\begin{align*}
+    u_{mk} \sim \mathrm{Gamma}(\alpha_0, \beta_0), \qquad
+    v_{nk} \sim \mathrm{Gamma}(\alpha_0, \beta_0).
+\end{align*}
+Note that even though the gamma distribution is conjugate to the Poisson, here we have an inner product of two gamma vectors producing one Poisson random variable.  The posterior distribution is more complicated.  The entries of~$u_m$ are not independent under the posterior due to the ``explaining away'' effect.  Nevertheless, we will derive a mean-field variational inference algorithm to approximate the posterior distribution.  
+
+\begin{enumerate}[label=(\alph*)]
+
+% =========================================================================
+\item First we will use an augmentation trick based on the additivity of Poisson random variables; i.e. the fact that
+\begin{align*}
+    y \sim \mathrm{Poisson}\left(\sum_k \lambda_k \right) \iff y = \sum_k y_k \; \text{where} \; y_k \sim \mathrm{Poisson}(\lambda_k) \; \text{independently},
+\end{align*}
+for any collection of non-negative rates~$\lambda_1, \ldots, \lambda_K \in \reals_+$.
+%%
+Use this fact to write the likelihood $p(y_{mn} \mid u_m, v_n)$ as a marginal of a joint distribution~$p(y_{mn}, \bar{y}_{mn} \mid u_m, v_n)$ 
+%%
+where $\bar{y}_{mn} = (y_{mn1}, \ldots, y_{mnK})$ is a length-$K$ vector of non-negative counts.
+
+\begin{solution}
+% ------------------------------------------------------------------
+We observe that $y_{mn}$ is deterministic given~$\bar{y}_{mn}$. This relation can also be stated as
+$ p(y_{mn} \given \bar{y}_{mn}, u_m, v_n) = 1 $
+
+The conditional joint distribution between the two variables can thus be stated as
+\begin{align*}
+    p(y_{mn}, \bar{y}_{mn} \given u_{m}, v_{n})
+        &=  p(y_{mn} \given \bar{y}_{mn}, u_{m}, v_{n})\,
+            p(\bar{y}_{mn} \given u_{m}, v_{n}) \\
+        &=  \bbI\left[ y_{mn} = \textstyle\sum_k \bar{y}_{mnk} \right]
+            \prod_k \mathrm{Poisson}(\bar{y}_{mnk}
+                \given \lambda_{mnk}; u_{mk}, v_{mk})
+\end{align*}
+When we sum over all combinations $\bar{y}_mn \in \bar{Y}_{mn}$, then we recover
+\begin{align*}
+    \sum_{\bar{y}_{mn} \in \bar{Y}_{mn}}
+    p(y_{mn}, \bar{y}_{mn} \mid u_m, v_n) 
+        &=  \sum_{\bar{y}_{mn} \in \bar{Y}_{mn}}
+            \bbI\left[y_{mn} = \textstyle\sum_k \bar{y}_{mnk} \right]
+            \prod_k \mathrm{Poisson}(\bar{y}_{mnk}
+                \given \lambda_{mnk}; u_{mk}, v_{nk})\\
+        &= \mathrm{Poisson}(y_{mn} = \textstyle\sum_k \bar{y}_{mnk}
+                \given \lambda_{mn}= \textstyle\sum_k \lambda_{mnk}; u_{mk}, v_{nk}) \\
+        &= \mathrm{Poisson}(y_{mn} 
+                \given \lambda_{mn}; u_{m}, v_{n})
+            = p(y_{mn} \given u_m, v_n)
+\end{align*}
+
+% ------------------------------------------------------------------
+\end{solution}
+
+% =========================================================================
+\clearpage
+\item Let~$\bar{Y} \in \bbN^{M \times N \times K}$ denote the augmented data matrix with entries~$y_{mnk}$ as above.  We will use mean field variational inference to approximate the posterior as,
+\begin{align*}
+    p(\bar{Y}, U, V \mid Y) &\approx q(\bar{Y}) \, q(U) \, q(V) = \left[\prod_{m=1}^M \prod_{n=1}^N q(\bar{y}_{mn}) \right] 
+    \left[ \prod_{m=1}^M \prod_{k=1}^K q(u_{mk}) \right] \left[ \prod_{n=1}^N \prod_{k=1}^K q(v_{nk}) \right].
+\end{align*}
+We will solve for the optimal posterior approximation via coordinate descent on the KL divergence to the true posterior.  Recall that holding all factors except for~$q(\bar{y}_{mn})$ fixed, the KL is minimized when
+\begin{align*}
+    q(\bar{y}_{mn}) \propto \exp \left\{\bbE_{q(\bar{Y}_{\neg mn}) q(U) q(V)} \left[ \log p(Y, \bar{Y}, U, V) \right] \right\},
+\end{align*}
+where~$q(\bar{Y}_{\neg mn}) = \prod_{(m',n') \neq (m,n)} q(\bar{y}_{m'n'})$ denotes all variational factors except for the~$(m,n)$-th.
+
+Show that the optimal~$q(\bar{y}_{mn})$ is a multinomial of the form,
+\begin{align*}
+    q(\bar{y}_{mn}) &= \mathrm{Mult}(\bar{y}_{mn} ; y_{mn}, \pi_{mn}),
+\end{align*}
+and solve for~$\pi_{mn} \in \Delta_K$.  You should write your answer in terms of expectations with respect to the other variational factors.
+
+\begin{solution}
+% ------------------------------------------------------------------
+First, we consider what the log of the multinomial distribution that we expect to get is:
+\begin{align*}
+    \log q(\bar{y}_{mn})
+        &= \log \Big[\mathrm{Mult}(\bar{y}_{mn} ; y_{mn}, \pi_{mn}),\Big]\\
+        &= \log \Big[\binom{y_{mn}}{\{\bar{y}_{mnk}\}_k}
+                    \frac{y_{mn}!}{\prod_k \bar{y}_{mnk}!}
+                    \prod_k \pi_{mnk}^{\bar{y}_{mnk}}\Big] \\
+        &= \log \Big[\bbI[y_{mn} = \textstyle\sum_k \bar{y}_{mnk}]
+                    \frac{y_{mn}!}{\prod_k \bar{y}_{mnk}!}
+                    \prod_k \pi_{mnk}^{\bar{y}_{mnk}}\Big] \\
+        &= \log \bbI[y_{mn} = \textstyle\sum_k \bar{y}_{mnk}]
+            + \log[y_{mn}!] - \sum_k \log[\bar{y}_{mnk}!]
+            +\sum_k \bar{y}_{mnk}\log(\pi_{mnk})
+\end{align*}
+Now,
+\begin{align*}
+    \log q(\bar{y}_{mn})
+        &= \E_{q(u_{mn}) q(v_{mn})} \left[
+            \log p(y_{mn}, \bar{y}_{m,n} \given u_{mn}, v_{mn}) \right]
+            + \textrm{const.}\\
+        &= \E_{q(u_{mn}) q(v_{mn})} \left[
+            \log \Big[
+                \bbI[y_{mn} = \textstyle\sum_k \bar{y}_{mnk}]
+                \prod_k \frac{\lambda_{mnk}^{\bar{y}_{mnk}}}{\bar{y}_{mnk}!}
+                    \expp{-\lambda_{mnk}}
+            \Big]\right]
+            + \textrm{const.}\\
+        &= \log \left[\bbI[y_{mn} = \textstyle\sum_k \bar{y}_{mnk}]\right]
+            - \textstyle\sum_k \log\big[\bar{y}_{mnk}!\big]
+            - \E_{q(u_{mn}) q(v_{mn})}\big[\textstyle\sum_k \lambda_{mnk}
+                + \textstyle\sum_k
+                    \bar{y}_{mnk}\,\log\left[\lambda_{mnk}\right]\big]
+            + \textrm{const.}
+\end{align*}
+which has the multinomial form. We find the unnormalized parameter
+$$
+\log\tilde{\pi}_{mnk} = \E_{q(u_{mk}) q(v_{nk})}[\log\lambda_{mnk}]
+= \E_{q(u_{mk})}[\log u_{mk}] + \E_{q(v_{nk})}[\log v_{nk}]
+$$
+
+Recall that we have the constraint that $\pi_{mn} \in \Delta_K$, so
+% $$
+% \pi_{mn} = \frac{\tilde{\pi}_{mnk}}{\textstyle\sum_k\expp{\log\tilde{\pi}_{mnk}}}
+% $$
+$$
+\pi_{mn} = \expp{\E_{q(u_{mk}) q(v_{nk})}[\log\lambda_{mnk}]
+            -\sum_j\E_{q(u_{mj}) q(v_{nj})}[\log\lambda_{mnj}]}
+$$
+% ------------------------------------------------------------------
+\end{solution}
+
+%===================================================================
+\item Holding all factors but~$q(u_{mk})$ fixed, show that optimal distribution is
+\begin{align*}
+    q(u_{mk}) 
+    &= \mathrm{Gamma}(u_{mk}; \alpha_{mk}, \beta_{mk}).
+\end{align*}
+Solve for~$\alpha_{mk}, \beta_{mk}$; write your answer in terms of expectations with respect to~$q(\bar{y}_{mn})$ and~$q(v_{nk})$.
+
+\begin{solution}
+% ------------------------------------------------------------------
+\begin{align*}
+    \log q(u_{mk})
+        &= \E_{q(\bar{y}_{mn})\,q(v_n)} \Big[
+            \log p(y_{mn}, \bar{y}_{mn}, u_m, v_n)
+            \Big] + \textrm{const.}\\
+        &= \E_{q(\bar{y}_{mn})\,q(v_n)} \Big[
+            \log p(y_{mn}, \bar{y}_{mn}, \given u_m, v_n)
+            + \log p(u_m) + \log p(v_n)
+            \Big] + \textrm{const.}\\
+        &= \E_{q(\bar{y}_{mnk})\,q(v_{nk})} \Big[
+            \bar{y}_{mnk}\,\log[\lambda_{mnk}] - \lambda_{mnk}
+            +(\alpha_0-1) \log[u_{mk}] - \beta_0\,u_{mk}
+            \Big] + \textrm{const.}\\
+        &= \E_{q(\bar{y}_{mnk})\,q(v_{nk})} \Big[
+            \bar{y}_{mnk}\,(\log[u_{mk}]+\log[v_{nk}]) - u_{mk}\,v_{nk}
+            +(\alpha_0-1) \log[u_{mk}] - \beta_0\,u_{mk}
+            \Big] + \textrm{const.} \\
+        &= \big(\E_{q(\bar{y}_{mnk})}[\bar{y}_{mnk}]
+                        +\alpha_0-1\big)\, \log[u_{mk}]]
+            - \big(\E_{q(v_{nk})}[v_{nk}] + \beta_0\big)\,u_{mk}
+            + \textrm{const.} \\
+    \Rightarrow \alpha_{mk}
+        &= \E_{q(\bar{y}_{mnk})}[\bar{y}_{mnk}] + \alpha_0 \\
+    \Rightarrow \beta_{mk}
+        &= \E_{q(v_{nk})}[v_{nk}] + \beta_0
+\end{align*}
+% ------------------------------------------------------------------
+\end{solution}
+
+\item Use the symmetry of the model to determine the parameters of the optimal gamma distribution for~$q(v_{nk})$, holding~$q(\bar{y}_{mn})$ and~$q(u_{mk})$ fixed,
+\begin{align*}
+    q(v_{nk}) &= \mathrm{Gamma}(v_{nk}; \alpha_{nk}, \beta_{nk}).
+\end{align*}
+Solve for~$\alpha_{nk}, \beta_{nk}$; write your answer in terms of expectations with respect to~$q(\bar{y}_{mn})$ and~$q(u_{mk})$.
+
+\begin{solution}
+% ------------------------------------------------------------------
+By symmetry, we find
+\begin{align*}
+    \Rightarrow \alpha_{nk}
+        &= \E_{q(\bar{y}_{mnk})}[\bar{y}_{mnk}] + \alpha_0\\
+    \Rightarrow \beta_{nk}
+        &= \E_{q(u_{mk})}[u_{mk}] + \beta_0
+\end{align*}
+% ------------------------------------------------------------------
+\end{solution}
+
+%===================================================================
+\item Now that the form of all variational factors has been determined, compute the required expectations (in closed form) to write the coordinate descent updates in terms of the other variational parameters.  Use the fact that~$\bbE[\log X] = \psi(\alpha) - \log \beta$ for~$X \sim \mathrm{Gamma}(\alpha, \beta)$, where~$\psi$ is the digamma function.
+
+\begin{solution}
+% ------------------------------------------------------------------
+\begin{align*}
+    q(\bar{y}_{mn}):
+        &\qquad
+            \log \tilde{\pi}_{mnk}
+            = \left(\psi(a_mk) - \log[b_{mk}]\right) +
+                \left(\psi(a_nk) - \log[b_{nk}]\right) \\
+    q(u_{mk}):
+        &\qquad
+            a_mk   = y_{mn}\,\pi_{mnk} + \alpha_0 \\
+        & \qquad
+            b_{mk}= \frac{a_{mk}}{b_{mk}} + \beta_0 \\
+    q(v_{nk}):
+        & \qquad
+            a_nk   = y_{mn}\,\pi_{mnk} + \alpha_0 \\
+        & \qquad
+            b_{nk}= \frac{a_{nk}}{b_{nk}} + \beta_0
+\end{align*}
+
+% ------------------------------------------------------------------
+\end{solution}
+
+\item Suppose that~$Y$ is a sparse matrix with only~$S \ll MN$ non-zero entries.  What is the complexity of this mean-field coordinate descent algorithm?
+
+\begin{solution}
+For each iteration, each of the three updates only needs to update $S$ parameters for each $k$ factors. So, the complexity of this algorithm is
+$$\cO(SK) \ll \cO(MN)$$
+\end{solution}
+
+\end{enumerate}

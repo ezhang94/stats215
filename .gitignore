@@ -2,10 +2,10 @@
 **/.ipynb_checkpoints/*
 
 # Ignore all Latex temporary/build files
-**/*
-!**/*.tex
-!**/*.sty
-!**/*.pdf
+**/*.log
+**/*.aux
+**/*.out
+**/*.synctex.gz
 
 # Ignore all pycaches
 **/__pycache__/*
