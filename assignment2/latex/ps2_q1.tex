@@ -100,7 +100,12 @@ Note the similarity to EM: rather than computing a posterior distribution over~$
 Implement this Gibbs sampling algorithm and test it on a synthetic dataset with~$D=2$ dimensional covariates and~$N=100$ data points.  Scatter plot your samples of~$w$ and, for comparison, plot the true value of~$w$ that generated the data. Do your samples look approximately Gaussian distributed?  How does the posterior distribution change when you vary~$N$? 
 
 \begin{solution}
-<<Your figures and captions here.>>
+This figure was generated together with Tucker and Minseung.
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=0.5\textwidth]{1c_image.png}
+    \caption{Samples of $w$ for different size datasets, vs. true value of $w$ (red). As we increase $N$, the posterior distribution has increasingly smaller variance, which is consistent with having more observations.}
+\end{figure}
 \end{solution}
 
 \item \textbf{Bonus.}  There are also auxiliary variable methods for logistic regression, where~$f(u) = e^u / (1+e^u)$.  Specifically,  we have that,

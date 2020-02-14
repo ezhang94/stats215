@@ -5,6 +5,7 @@
 **/*.log
 **/*.aux
 **/*.out
+**/*.synctex
 **/*.synctex.gz
 
 # Ignore all pycaches
