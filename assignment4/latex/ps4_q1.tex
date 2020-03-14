@@ -1,0 +1,130 @@
+%!TEX root = eyz_assignment4.tex
+\textbf{Problem 1:} Consider a Gaussian linear dynamical system (LDS),
+\begin{align*}
+    p(x_{1:T}, y_{1:T}) &= \cN(x_1 \mid 0, q^2) \left[ \prod_{t=2}^T \cN(x_t \mid a x_{t-1} + b, q^2) \right] 
+    \left[ \prod_{t=1}^T \cN(y_{t} \mid x_t, r^2) \right],
+\end{align*}
+for~$x_t, y_t \in \reals$ for all~$t$, and parameters~$a, b \in \reals$ and $q^2, r^2 \in \reals_+$.  
+Compute the forward filtered distribution~$p(x_t \mid y_{1:t})$ in terms of the model parameters 
+and the filtered distribution~$p(x_{t-1} \mid y_{1:t-1})$.  Solve for the base case~$p(x_1 \mid y_1)$.  
+For reference, consult the state space modeling chapters of either the Bishop or the Murphy textbook.
+
+\begin{solution}
+
+A directed graph of linear Gaussians is equivalent to a joint Gaussian distribution over all of variables,
+so the marginal distribution of each variable is also Gaussian.
+Similarly, in this linear Gaussian dynamical system, the posterior marginals of latent variables will be Gaussian.
+So, we know that the forward filtered distributions take the form
+\begin{align*}
+	p(x_t \mid y_{1:t}) &= \cN(x_t \given m_t, v_t) \\
+	p(x_{t-1} \mid y_{1:t-1}) &= \cN(x_{t-1} \given m_{t-1}, v_{t-1})
+\end{align*}
+
+We will first derive the forward filtered distribution $p(x_t \mid y_{1:t})$ by evaluating the posterior marginal and conditional distributions of a linear Gaussian model (method A), and then confirm with the derived Kalman filter equations (method B).
+
+\textbf{Method A} \\
+Given the model parameters and the filtered distribution from the previous timestep $p(x_{t-1} \mid y_{1:t-1}) \propto \cN(x_{t-1}\given m_{t-1}, v_{t-1})$, we have
+\begin{align*}
+	p(x_t \mid y_{1:t})
+		&\propto p(y_{1:t} \given x_t)\, p(x_t) \\
+		&\propto p(y_{t} \given x_t)\, p(y_{1:t-1}\given x_t)\, p(x_t) \\
+		&\propto p(y_{t} \given x_t)\, \int p(y_{1:t-1}\given x_t, x_{t-1})\, p(x_t \given x_{t-1})\, \textrm{d}x_{t-1} \\
+		&\propto p(y_{t} \given x_t)\, \int p(x_{t-1} \given y_{1:t-1})\, p(x_t \given x_{t-1})\, \textrm{d}x_{t-1} \\
+		&\propto \cN(y_t \given x_t, r^2)\,
+			\int \cN(x_{t-1}\given m_{t-1}, v_{t-1})\,
+			\cN(x_t \given ax_{t-1} +b, q^2)\, \textrm{d}x_{t-1}.
+		\numberthis\label{q1_part1end}
+\end{align*}
+Using the posterior marginal distribution results for linear Gaussian models (Bishop 2.115), we can simplify the integral as follows
+\begin{align*}
+	p(x_t)
+		&= \int p(x_{t-1}) \, p(x_t \given x_{t-1})\, \textrm{d}x_{t-1} \\
+		&= \int \cN(x_{t-1}\given m_{t-1}, V_{t-1})\,
+			\cN(x_t \given ax_{t-1} +b, q^2)\, \textrm{d}x_{t-1} \\
+		&= \int \cN(x_t \given a m_{t-1}, p_{t-1})\, \textrm{d}x_{t-1}
+		= \cN(x_t \given a m_{t-1}, p_{t-1})
+\end{align*}
+where $p_{t-1} = q^2 + a^2 v_{t-1}$. Then, continuing from Eqn.~\eqref{q1_part1end}, we again make use of Bishop Eqns. (2.115) and (2.116) to identify,
+
+\begin{align*}
+	\textrm{\textcolor{gray}{Bishop Eqns. 2.113-2.117}}
+		&\qquad \textrm{This problem} \\
+	\textcolor{gray}{p(x) = \cN(x \given \tilde{\mu}, \Lambda^\inv)}
+		&\qquad p(x_t) = \cN(x_t \given a\cdot m_{t-1}, p_{t-1})\\
+	\textcolor{gray}{p(y \given x)
+		= \cN(y \given \tilde{A}x + \tilde{b}, L^\inv)}
+		&\qquad p(y_t \given x_t) = \cN(y_t \given x_t, r^2) \\
+	\textcolor{gray}{p(y)
+		= \cN(y \given \tilde{A}\,\mu + b,
+		\tilde{L}^\inv + \tilde{A}\Lambda \tilde{A}^\trans)}
+		&\qquad p(y_t) = \cN(y_t \given a\cdot m_{t-1}, r^2 + p_{t-1}^\inv)\\
+	\textcolor{gray}{p(x \given y) = 
+		\cN(x \given \tilde{\Sigma}\,(\tilde{A}^\trans L (y-\tilde{b}) + \Lambda \tilde{\mu}), \tilde{\Sigma})}
+		&\qquad p(x_t \given y_t) =
+			\cN(x_t \given \tilde{\Sigma}\,(r^{-2}y + p_{t-1}^\inv(a\cdot m_{t-1})), \tilde{\Sigma})\\
+	\textcolor{gray}{\quad \textrm{for } \tilde{\Sigma} = (\Lambda + A^\trans L A)^\inv}
+		&\qquad \quad \textrm{for }
+			\tilde{\Sigma} = (p_{t-1}^\inv + r^{-2})^\inv
+\end{align*}
+where $\textcolor{gray}{\tilde{\mu}=}a\cdot m_{t-1}$,
+$\textcolor{gray}{\Lambda^\inv=}p_{t-1}$,
+$\textcolor{gray}{\tilde{A}=}1$,
+$\textcolor{gray}{\tilde{b}=}0$, and
+$\textcolor{gray}{L^\inv=}r^2$.
+So $p(x_t \mid y_{1:t}) = \cN(x_t \given m_t, v_t)$ for
+
+\begin{align*}
+	m_t &= \frac{p_{t-1}\, y_t + a\,r^2\,m_{t-1}}{r^2 + p_{t-1}}
+	\numberthis\label{q1_solution_a1} \\
+	v_t &= \frac{r^2\,p_{t-1}}{r^2 + p_{t-1}}
+	\numberthis\label{q1_solution_a2}
+\end{align*}
+
+\textbf{Method B}
+\begin{align*}
+	\textrm{\textcolor{gray}{Bishop LDS Model}}
+		&\qquad \textrm{This problem} \\
+	\textcolor{gray}{p(x_n \given x_{n-1}) = \cN(x_n \given A x_{n-1}, \Gamma)}
+		&\qquad p(x_t \given x_{t-1}) = \cN(x_n \given a x_{t-1}, q^2) \\
+	\textcolor{gray}{p(y_n \given x_n) = \cN(x_t \given C x_{n}, \Sigma)}
+		&\qquad p(y_t \given x_t) = \cN(y_t \given x_{t}, r^2) \\
+	\\
+	\textrm{\textcolor{gray}{Bishop Eqns. 13.89-13.92}}
+		&\qquad \textrm{This problem} \\
+	\textcolor{gray}{\mu_n = A \mu_{n-1} + K_n(x_n -CA\mu_{n-1})}
+		&\qquad m_t = a\cdot m_{t-1} + k_t(y_t - a\cdot m_{t-1}) \\
+	\textcolor{gray}{V_n = (I - K_n C)\, P_{n-1}}
+		&\qquad v_t = (1 - k_t)\,p_{t-1}\\
+	\textcolor{gray}{c_n = \cN(x_n \given CA\mu_{n-1}, CP_{n-1}C^\trans + \Sigma)}
+		&\qquad p(y_t) = \cN(y_t \given a\cdot m_{t-1}, p_{t-1} + r^2)\\
+	\textcolor{gray}{K_n = P_{n-1}\,C^\trans (CP_{n-1}C^\trans + \Sigma)^\inv}
+		&\qquad k_t = p_{t-1} (p_{t-1} + r^2)^\inv \\
+\end{align*}
+If we expand out the expressions for $k_t$, $m_t$, and $v_t$, we find that they agree with Eqn.~\eqref{q1_solution_a1}~and~\eqref{q1_solution_a2} which were found via the first method:
+\begin{align*}
+	k_t &= \frac{p_{t-1}}{p_{t-1}+r^2} \\
+	m_t &= a\cdot m_{t-1} + k_t(y_t - a\cdot m_{t-1}) \\
+		&= \frac{a\cdot m_{t-1}\,(p_{t-1}+r^2)}{p_{t-1}+r^2}
+			+ \frac{p_{t-1}\,(y_t - a\cdot m_{t-1})}{p_{t-1}+r^2} \\
+		&= \frac{a\,p_{t-1}\,m_{t-1} + a\,r^2\,m_{t-1} +
+				p_{t-1}\,y_t - a\,p_{t-1}\,m_{t-1})}
+			{p_{t-1}+r^2} \\
+		&= \frac{a\,r^2\,m_{t-1} +p_{t-1}\,y_t} {p_{t-1}+r^2}
+		\numberthis\label{q1_solution_b1} \\
+	v_t &= (1-k_t)\,p_{t-1} \\
+		&= \left(1-\frac{p_{t-1}}{p_{t-1}+r^2}\right) p_{t-1} \\
+		&= \frac{p_{t-1}+r^2 - p_{t-1}}{p_{t-1}+r^2} p_{t-1}
+			= \frac{p_{t-1}\,r^2 - p_{t-1}}{p_{t-1}+r^2}
+			\numberthis\label{q1_solution_b2}
+\end{align*}
+
+The base case $p(x_1 \given y_1)$ is then given by Bishop Eqns.~(13.94-13.97):
+\begin{align*}
+	m_1 &= k_1\,y_1\\
+	v_1 &= (1 - k_1)\, q^2\\
+	c_1 &= \cN(y_1 \given 0, q^2 + r^2)\\
+	k_1 &= \frac{q^2}{q^2 + r^2}
+\end{align*}
+
+In the Kalman filtering equations, we see how the new model mean $m_t$ is a weighted average of the evolved model mean $a\cdot m_{t-1}$ and the error betwen observation and evolved mean.
+\end{solution}
